@@ -4,11 +4,9 @@ Many diff between go and ruby/python.
 1.编译语言。
 2.引用规则较严，没用的pk变量会导致编译不过。
 3.函数变量命名规则完全不同，切很多的用法概念借鉴脚本语言，c／c++， 感觉是综合性质的语言。
-4.go中error直接返回
-
-
-
-
+4.go中error直接返回，try catch要自己写
+5.函数传入不定参数语法区别，传入可传数组切片
+6.指针与c／c++差不多，改变值本身需要传递指针
 
 go memcached 用法
 使用广泛的pk是: go get github.com/bradfitz/gomemcache/memcache
