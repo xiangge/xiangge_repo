@@ -7,7 +7,6 @@ Many diff between go and ruby/python.
 4.go中error直接返回，try catch要自己写
 5.函数传入不定参数语法区别，传入可传数组切片
 6.指针与c／c++差不多，改变值本身需要传递指针
+7.怎样实现python中的不同深度的dict，或是js中的json
 
-go memcached 用法
-使用广泛的pk是: go get github.com/bradfitz/gomemcache/memcache
 
