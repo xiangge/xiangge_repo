@@ -9,3 +9,15 @@ Many diff between go and ruby/python.
 6.指针与c／c++差不多，改变值本身需要传递指针
 7.怎样实现python中的不同深度的dict，或是js中的json, go静态语言要对应到对象中去，解析yaml不灵活.
   可以理解为所有编译型语言操作文件不灵活
+8.go map 跟dict／hash差不多
+map 遍历
+var m map[int]string
+var keys []int
+for k := range m {
+    keys = append(keys, k)
+}
+sort.Ints(keys)
+for _, k := range keys {
+    fmt.Println("Key:", k, "Value:", m[k])
+}
+9. yaml 文件加－ 表示数组展示，不加－可以key／value展示
