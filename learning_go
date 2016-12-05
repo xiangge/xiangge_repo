@@ -21,3 +21,4 @@ for _, k := range keys {
     fmt.Println("Key:", k, "Value:", m[k])
 }
 9. yaml 文件加－ 表示数组展示，不加－可以key／value展示
+10.go 语言数据类型匹配转化比较严格，差一点就转化不出来，map string 啥的
