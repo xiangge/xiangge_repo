@@ -1,1 +1,23 @@
 This is a python learning file
+1.Python 单例模式
+2.Python 协程，生成器，迭代器
+3.python 数组，简单函数
+filter 函数的功能相当于过滤器
+>>>a = [1,2,3,4,5,6,7]
+>>>b = filter(lambda x: x > 5, a)
+>>>print b
+>>>[6,7]
+map函数是对一个序列的每个项依次执行函数
+>>> a = map(lambda x:x*2,[1,2,3])
+>>> list(a)
+[2, 4, 6]
+数组去重，set强制转换
+reduce函数是对一个序列的每个项迭代调用函数
+>>> reduce(lambda x,y:x*y,range(1,4))
+6
+
+4.python 闭包
+5.python 语法糖
+6.python 闭包
+7.django 源码分析，设计模式，应用技巧
+8.python web框架，django tonado的区别
