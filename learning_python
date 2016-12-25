@@ -1,5 +1,39 @@
 This is a python learning file
 1.Python 单例模式
+class Singleton(object):
+    def __new__(cls, *args, **kw):
+        if not hasattr(cls, '_instance'):
+            orig = super(Singleton, cls)
+            cls._instance = orig.__new__(cls, *args, **kw)
+        return cls._instance
+ 
+class MyClass(Singleton):
+    a = 1
+    
+def singleton(cls, *args, **kw):
+    instances = {}
+    def getinstance():
+        if cls not in instances:
+            instances[cls] = cls(*args, **kw)
+        return instances[cls]
+    return getinstance
+ 
+@singleton
+class MyClass:
+
+
+class My_Singleton(object):
+    def foo(self):
+        pass
+ 
+my_singleton = My_Singleton()
+ 
+# to use
+from mysingleton import my_singleton
+ 
+my_singleton.foo()
+
+
 2.Python 协程，生成器，迭代器
 3.python 数组，简单函数
 filter 函数的功能相当于过滤器
@@ -15,6 +49,35 @@ map函数是对一个序列的每个项依次执行函数
 reduce函数是对一个序列的每个项迭代调用函数
 >>> reduce(lambda x,y:x*y,range(1,4))
 6
+
+python 中赋值，deepcopy copy 区别
+import copy
+a = [1, 2, 3, 4, ['a', 'b']]  #原始对象
+ 
+b = a  #赋值，传对象的引用
+c = copy.copy(a)  #对象拷贝，浅拷贝
+d = copy.deepcopy(a)  #对象拷贝，深拷贝
+ 
+a.append(5)  #修改对象a
+a[4].append('c')  #修改对象a中的['a', 'b']数组对象
+ 
+print 'a = ', a
+print 'b = ', b
+print 'c = ', c
+print 'd = ', d
+ 
+输出结果：
+a =  [1, 2, 3, 4, ['a', 'b', 'c'], 5]
+b =  [1, 2, 3, 4, ['a', 'b', 'c'], 5]
+c =  [1, 2, 3, 4, ['a', 'b', 'c']]
+d =  [1, 2, 3, 4, ['a', 'b']]
+
+python中的is和 == 对比， 前者是地址对比，后者是数值对比
+read,readline和readlines
+read 读取整个文件
+readline 读取下一行,使用生成器方法
+readlines 读取整个文件到一个迭代器以供我们遍历
+
 
 4.python 闭包
 5.python 语法糖
