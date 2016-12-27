@@ -1,0 +1,6 @@
+Mysql:
+You can't specify target table for update in FROM clause 在做更新，删除的时候不能在条件语句中显式的查询相同的表，要重命名。
+delete from blink where (user, url, proxy,date(require_time)) in (select a.user,a.url,a.proxy,a.rtime from
+(select tmp.user,tmp.url,tmp.proxy,date(tmp.require_time) as rtime from blink tmp group by tmp.user,tmp.url,
+tmp.proxy,date(tmp.require_time) having count(*) >100) a) and id not in (select c.id from (select min(tmp.id) 
+as id from blink tmp group by tmp.user,tmp.url,tmp.proxy,date(tmp.require_time) having count(*) >100) c);
