@@ -84,3 +84,22 @@ readlines 读取整个文件到一个迭代器以供我们遍历
 6.python 闭包
 7.django 源码分析，设计模式，应用技巧
 8.python web框架，django tonado的区别
+9.阿 u 是你发
+8.python web框架，django tonado的区别
+9.算法
+链表成对调换
+class ListNode:
+    def __init__(self, x):
+        self.val = x
+        self.next = None
+
+class Solution:
+    # @param a ListNode
+    # @return a ListNode
+    def swapPairs(self, head):
+        if head != None and head.next != None:
+            next = head.next
+            head.next = self.swapPairs(next.next)
+            next.next = head
+            return next
+        return head
