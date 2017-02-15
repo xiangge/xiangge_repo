@@ -1,0 +1,2 @@
+Use scrapy
+install: when install scrapy, use the twisted version less than 16.6.0, if not, will raise the ssl errors.
