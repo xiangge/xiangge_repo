@@ -1,2 +1,13 @@
 Use scrapy
 install: when install scrapy, use the twisted version less than 16.6.0, if not, will raise the ssl errors.
+
+docker install mongo
+runing mongo command:
+docker run -d -p --name mongo-spider -p 27017:27017 mongo
+
+# 建立並運行 mongodb docker container
+$ docker run -d --name mongodb_3.3 -p 27017:27017 mongo:3.3.6
+
+# 建立 mongo-express 並且連結到 剛剛建立的 mongodb docker container
+$ docker run -d --name mongodb_web_336 --link mongodb_3.3:mongo -p 8081:8081  mongo-express
+=
