@@ -5,6 +5,7 @@ delete from blink where (user, url, proxy,date(require_time)) in (select a.user,
 tmp.proxy,date(tmp.require_time) having count(*) >100) a) and id not in (select c.id from (select min(tmp.id) 
 as id from blink tmp group by tmp.user,tmp.url,tmp.proxy,date(tmp.require_time) having count(*) >100) c);
 
+mysql查询优化,join／in,索引,分表
 
 mongo db:
 插入空数据在collection时，根据id查询时是查不到数据的，只能先删除。
