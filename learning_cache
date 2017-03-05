@@ -1,2 +1,8 @@
 go memcached 用法
 使用广泛的pk是: go get github.com/bradfitz/gomemcache/memcache
+
+kafka===============
+
+redis================
+
+memcache ============
