@@ -1,0 +1,275 @@
+Skip to content
+This repository
+Search
+Pull requests
+Issues
+Marketplace
+Explore
+ @xiangge
+ Sign out
+ Unwatch 1
+  Star 0
+ Fork 0 xiangge/codes
+ Code  Pull requests 0  Projects 0  Insights  Settings
+Branch: master Find file Copy pathcodes/c-study/struct_stu
+8a75d83  on Feb 3, 2015
+@invalid-email-address invalid-email-address struct study
+1 contributor
+RawBlameHistory    
+245 lines (182 sloc)  6.08 KB
+ 好久不看C语言的书了，许多名词与以前也不一样了。以前小雅的老师把现在要讲的这一章叫“结构体”，现在的新书上叫“构造体”，小雅比较怀旧，仍称之为“结构体”。
+
+结构体就是将几个类型的数据结合成一个类型的数据来处理，例如图书馆管理书籍，一本书总是包含编号、书名、单价等内容，于是把编号、书名、单价结合成一个类型，当然这样的数据类型是自定义的数据类型，这就是结构体。注意：结构体是数据类型，而不是变量，必须在程序中定义了该类型的就是后才能操作数据。
+一、结构体的基本使用
+
+结构体的使用要注意以下几个方面：
+
+    结构体的标记名不是变量，它和struct连用才表示自定义的数据类型。
+    用结构体定义的变量可以是一般变量，也可以是数组或指针。
+    一般变量和数组操作元素时用“.”，指针操作元素时用“->”。
+    结构体的元素可以是任何数据类型，包括自定义的结构体类型。
+    结构体的元素虽可以是指针，但极易造成内存泄漏，宜慎用。
+    结构体数组变量名可以当作地址，普通变量名不能当作地址，必须前置“&”。
+    元素的地址要看其类型，基本类型时同样要使用“&”。 
+
+
+#include <stdio.h>
+#include <string.h>
+
+//结构体的定义
+struct BOOK {
+    char  id[4];       //编号
+    char  name[64];    //书名
+    float price;       //单价
+};
+
+int main(void)
+{
+    //结构体也可以初始化时直接赋值
+    struct BOOK clang = {"101", "劝学网的C语言教程", 25.5};
+    struct BOOK books[2];
+    struct BOOK *p;
+
+    //变量或数组对结构体元素的赋值
+    strcpy(books[0].id, "201");
+    strcpy(books[0].name, "劝学网的Oracle教程");
+    books[0].price = 35.5;
+
+    //指针对结构体元素的赋值
+    p = books + 1;
+    strcpy(p->id, "202");
+    strcpy(p->name, "小雅的Java教程");
+    p->price = 45.5;
+
+    //显示结构体变量的内容
+    printf("%s, %s, %f\n", clang.id, clang.name, clang.price);
+    printf("%s, %s, %f\n", books[0].id, books[0].name, books[0].price);
+    printf("%s, %s, %f\n", p->id, books[1].name, (books+1)->price);
+
+    return 0;
+}
+
+
+二、结构体作参数和返回值
+
+下面例子分别演示结构体变量、指针在作参数和返回值时的各种情况。
+
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+struct p_type {
+    char id[4];       //编码
+    char name[16];    //姓名
+};
+
+//结构体变量作参数
+void setByVar(struct p_type per) {
+    strcpy(per.id, "202");
+    strcpy(per.name, "张展");
+
+    return ;
+}
+
+//结构体指针作参数
+void setByAdd(struct p_type *per) {
+    strcpy(per->id , "303");
+    strcpy(per->name, "张腾");
+
+    return ;
+}
+
+//结构体变量作返回值
+struct p_type setNewByVar() {
+    static struct p_type zh;   //一定要是静态变量才能作为返回值
+
+    strcpy(zh.id, "404");
+    strcpy(zh.name, "张翅");
+
+    return zh;
+}
+
+//结构体指针作返回值
+struct p_type *setNewByAdd() {
+    struct p_type *p;
+
+    p = (struct p_type *)malloc(sizeof(struct p_type));
+    strcpy(p->id, "505");
+    strcpy(p->name, "张去");
+
+    return p;
+}
+
+void print(const struct p_type *per) {
+    printf("%s, %s\n", per->id, per->name);
+
+    return
+}
+
+int main(void)
+{
+    struct p_type zhang, *p, tmp;
+
+    //变量中的初始值
+    strcpy(zhang.id, "101");
+    strcpy(zhang.name, "张飞");
+
+    //用变量直接作参数，值不能被修改
+    setByVar(zhang);
+    print(&zhang);    //结果：101, 张飞
+
+    //用指针直接作参数，值可以被修改
+    setByAdd(&zhang);
+    print(&zhang);    //结果：303, 张腾
+
+    //用变量直接作返回值，OK
+    tmp = setNewByVar();
+    print(&tmp);      //结果：404, 张翅
+
+    //用指针直接作返回值，OK
+    p = setNewByAdd();
+    print(p);         //结果：505, 张去
+    free(p);          //释放内存不能忘记
+
+    return 0;
+}
+
+由上例可以看出，结构体使用指针作参数时是按地址传送的，不使用指针便按值传送，说明一点，结构体是基本类型的一种扩充，符合基本类型的规律。
+三、结构体的位字段(BitField)
+
+当结构体中的元素的取值范围很小时，可以将几个字段按位合成一个字段来表示，起到节省内存空间的作用。
+
+
+#include <stdio.h>
+#include <string.h>
+
+struct b_type {
+    unsigned char depart: 3 ;   //部门(最大7个部门)
+    unsigned char sex: 1 ;      //性别
+    unsigned char reason: 2 ;   //理由(共4个)
+};
+
+void print(struct b_type *rea) {
+    char dep[7];
+    char sex[3];
+    char res[5];
+
+    switch (rea->depart) {
+        case 1:
+            strcpy(dep,"财务科");
+            break;
+        case 2:
+            strcpy(dep,"开发科");
+            break;
+        case 3:
+            strcpy(dep,"检测科");
+            break;
+        case 4:
+            strcpy(dep,"生产科");
+            break;
+        default:
+            break;
+    }
+
+    switch (rea->sex) {
+        case 0:
+            strcpy(sex,"男");
+            break;
+        default:
+            strcpy(sex,"女");
+            break;
+    }
+
+    switch (rea->reason) {
+        case 1:
+            strcpy(res,"事假");
+            break;
+        case 2:
+            strcpy(res,"病假");
+            break;
+        case 3:
+            strcpy(res,"婚假");
+            break;
+        default:
+            strcpy(res,"无故");
+            break;
+    }
+
+    printf("%s, %s, %s\n", dep, sex, res);
+
+    return ;
+}
+
+int main(void)
+{
+    struct b_type staff; 
+
+    staff.depart = 2;
+    staff.sex = 0;
+    staff.reason =4;
+
+    printf("staff的长度：%d\n", sizeof(struct b_type));
+    print(&staff);
+
+    return 0;
+}
+
+
+四、没有标记名的结构体
+
+C语言同样允许没有标记名的结构体。
+
+
+#include <stdio.h>
+#include <string.h>
+
+int main(void)
+{
+    struct {
+        char id[4] ;       //编码
+        char name[16] ;    //姓名
+    } staff, *p;
+
+    strcpy(staff.id, "101");
+    strcpy(staff.name, "后羿");
+    
+    p = &staff ;
+
+    printf("%s, %s\n", p->id, p->name);
+
+    return 0;
+}
+
+© 2017 GitHub, Inc.
+Terms
+Privacy
+Security
+Status
+Help
+Contact GitHub
+API
+Training
+Shop
+Blog
+About
