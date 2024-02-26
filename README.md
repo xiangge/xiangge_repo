@@ -1,2 +1,2 @@
 # xiangge_repo
-Note of  study!
+Personal projects for testing.
