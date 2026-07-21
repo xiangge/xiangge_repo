@@ -1,0 +1,80 @@
+name: Issue Agent Gateway
+
+on:
+  issues:
+    types: [opened]
+  workflow_dispatch:
+    inputs:
+      issue_number:
+        description: Issue number to dispatch manually
+        required: true
+
+permissions:
+  contents: read
+  issues: read
+
+jobs:
+  dispatch:
+    name: Dispatch issue to local agent gateway
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Build event payload
+        id: payload
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT_NAME: ${{ github.event_name }}
+          ISSUE_NUMBER: ${{ github.event.issue.number || inputs.issue_number }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            gh issue view "$ISSUE_NUMBER" --repo "$REPOSITORY" --json number,title,body,url,labels,state > /tmp/issue.json
+            gh repo view "$REPOSITORY" --json nameWithOwner,sshUrl,url,defaultBranchRef > /tmp/repo.json
+            jq -n \
+              --arg action "opened" \
+              --slurpfile issue /tmp/issue.json \
+              --slurpfile repo /tmp/repo.json \
+              '{
+                action: $action,
+                issue: {
+                  number: $issue[0].number,
+                  title: $issue[0].title,
+                  body: $issue[0].body,
+                  html_url: $issue[0].url,
+                  state: $issue[0].state,
+                  labels: $issue[0].labels
+                },
+                repository: {
+                  full_name: $repo[0].nameWithOwner,
+                  ssh_url: $repo[0].sshUrl,
+                  clone_url: $repo[0].url,
+                  default_branch: $repo[0].defaultBranchRef.name
+                }
+              }' > /tmp/event.json
+          else
+            cat "$GITHUB_EVENT_PATH" > /tmp/event.json
+          fi
+
+      - name: Dispatch to gateway
+        env:
+          GATEWAY_URL: ${{ secrets.GATEWAY_URL }}
+          GATEWAY_TOKEN: ${{ secrets.GATEWAY_TOKEN }}
+          DELIVERY_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          if [ -z "$GATEWAY_URL" ]; then
+            echo "::error::Missing GATEWAY_URL secret"
+            exit 1
+          fi
+
+          if [ -z "$GATEWAY_TOKEN" ]; then
+            echo "::error::Missing GATEWAY_TOKEN secret"
+            exit 1
+          fi
+
+          curl --fail-with-body --retry 3 --connect-timeout 10 --max-time 120 \
+            -X POST "$GATEWAY_URL" \
+            -H "Authorization: Bearer $GATEWAY_TOKEN" \
+            -H "Content-Type: application/json" \
+            -H "X-GitHub-Event: issues" \
+            -H "X-GitHub-Delivery: $DELIVERY_ID" \
+            --data-binary @/tmp/event.json
