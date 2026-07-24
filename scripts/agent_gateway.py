@@ -37,6 +37,42 @@ def parse_csv(value: str | None) -> set[str]:
     return {item.strip() for item in value.split(",") if item.strip()}
 
 
+def repo_key(repo: str) -> str:
+    return repo.strip().lower()
+
+
+def parse_repo_allowlist(value: str | None) -> set[str]:
+    return {repo_key(item) for item in parse_csv(value)}
+
+
+def parse_repo_urls(value: str | None) -> dict[str, str]:
+    if not value:
+        return {}
+
+    value = value.strip()
+    if not value:
+        return {}
+
+    if value.startswith("{"):
+        parsed = json.loads(value)
+        if not isinstance(parsed, dict):
+            raise ValueError("GATEWAY_REPO_URLS JSON must be an object")
+        return {repo_key(str(repo)): str(url).strip() for repo, url in parsed.items() if str(url).strip()}
+
+    repo_urls: dict[str, str] = {}
+    for item in value.split(","):
+        item = item.strip()
+        if not item:
+            continue
+        if "=" not in item:
+            raise ValueError("GATEWAY_REPO_URLS entries must use owner/repo=url")
+        repo, url = item.split("=", 1)
+        if not repo.strip() or not url.strip():
+            raise ValueError("GATEWAY_REPO_URLS entries must include both repo and URL")
+        repo_urls[repo_key(repo)] = url.strip()
+    return repo_urls
+
+
 def bool_env(name: str, default: bool = False) -> bool:
     value = os.getenv(name)
     if value is None:
@@ -76,10 +112,12 @@ class Config:
     issue_actions: set[str]
     done_label: str
     agent_command: str | None
+    codex_bin: str | None
     agent_timeout_seconds: int
     auto_pr: bool
     force_push: bool
     use_ssh: bool
+    repo_urls: dict[str, str]
     repo_url_override: str | None
     sync: bool
     dry_run: bool
@@ -90,7 +128,7 @@ class Config:
             host=args.host or os.getenv("GATEWAY_HOST", "127.0.0.1"),
             port=args.port or int(os.getenv("GATEWAY_PORT", "8787")),
             work_root=Path(os.getenv("GATEWAY_WORK_ROOT", ".agent-gateway")).resolve(),
-            allowed_repos=parse_csv(os.getenv("GATEWAY_ALLOWED_REPOS")),
+            allowed_repos=parse_repo_allowlist(os.getenv("GATEWAY_ALLOWED_REPOS")),
             allow_any_repo=bool_env("GATEWAY_ALLOW_ANY_REPO"),
             bearer_token=os.getenv("GATEWAY_BEARER_TOKEN"),
             webhook_secret=os.getenv("GITHUB_WEBHOOK_SECRET"),
@@ -98,16 +136,26 @@ class Config:
             issue_actions=parse_csv(os.getenv("GATEWAY_ISSUE_ACTIONS")) or {"opened"},
             done_label=os.getenv("GATEWAY_DONE_LABEL", "codex:spec-created"),
             agent_command=os.getenv("GATEWAY_AGENT_COMMAND"),
+            codex_bin=os.getenv("GATEWAY_CODEX_BIN"),
             agent_timeout_seconds=int(os.getenv("GATEWAY_AGENT_TIMEOUT_SECONDS", "3600")),
             auto_pr=not bool_env("GATEWAY_NO_PR"),
             force_push=bool_env("GATEWAY_FORCE_PUSH"),
             use_ssh=not bool_env("GATEWAY_USE_HTTPS"),
+            repo_urls=parse_repo_urls(os.getenv("GATEWAY_REPO_URLS")),
             repo_url_override=os.getenv("GATEWAY_REPO_URL"),
             sync=bool_env("GATEWAY_SYNC") or args.once is not None,
             dry_run=args.dry_run or bool_env("GATEWAY_DRY_RUN"),
         )
 
+    def require_safe_repo_url_config(self) -> None:
+        if self.repo_url_override and (self.allow_any_repo or len(self.allowed_repos) != 1):
+            raise SystemExit(
+                "GATEWAY_REPO_URL is only safe for one allowed repo. For multiple repos, "
+                "use GATEWAY_REPO_URLS='owner/a=url,owner/b=url' or rely on GitHub payload URLs."
+            )
+
     def require_safe_server_config(self) -> None:
+        self.require_safe_repo_url_config()
         if not (self.bearer_token or self.webhook_secret or self.allow_insecure):
             raise SystemExit(
                 "Refusing to start without auth. Set GATEWAY_BEARER_TOKEN, "
@@ -208,7 +256,7 @@ def build_job(config: Config, payload: dict[str, Any]) -> tuple[Job | None, str]
     repo = repo_data.get("full_name", "")
     if not repo:
         raise ValueError("payload.repository.full_name is required")
-    if not (config.allow_any_repo or repo in config.allowed_repos):
+    if not (config.allow_any_repo or repo_key(repo) in config.allowed_repos):
         raise PermissionError(f"repository is not allowed: {repo}")
 
     number = int(issue.get("number") or 0)
@@ -254,11 +302,20 @@ def build_job(config: Config, payload: dict[str, Any]) -> tuple[Job | None, str]
     )
 
 
+def resolve_repo_url(config: Config, job: Job) -> str:
+    mapped_url = config.repo_urls.get(repo_key(job.repo))
+    if mapped_url:
+        return mapped_url
+    if config.repo_url_override:
+        return config.repo_url_override
+    return job.ssh_url if config.use_ssh else job.clone_url
+
+
 def prepare_repo(config: Config, job: Job, log_file: Path) -> Path:
     repo_dir = config.work_root / "repos" / slugify(job.repo)
-    repo_url = config.repo_url_override or (job.ssh_url if config.use_ssh else job.clone_url)
+    repo_url = resolve_repo_url(config, job)
     if not repo_url:
-        raise ValueError("No repository clone URL found. Set GATEWAY_REPO_URL.")
+        raise ValueError("No repository clone URL found. Set GATEWAY_REPO_URLS or GATEWAY_REPO_URL.")
 
     if repo_dir.exists():
         run_command(["git", "remote", "set-url", "origin", repo_url], repo_dir, log_file, dry_run=config.dry_run)
@@ -267,8 +324,7 @@ def prepare_repo(config: Config, job: Job, log_file: Path) -> Path:
         repo_dir.parent.mkdir(parents=True, exist_ok=True)
         run_command(["git", "clone", repo_url, str(repo_dir)], config.work_root, log_file, dry_run=config.dry_run)
 
-    if not config.dry_run:
-        repo_dir.mkdir(parents=True, exist_ok=True)
+    repo_dir.mkdir(parents=True, exist_ok=True)
     run_command(["git", "checkout", job.default_branch], repo_dir, log_file, dry_run=config.dry_run)
     run_command(["git", "reset", "--hard", f"origin/{job.default_branch}"], repo_dir, log_file, dry_run=config.dry_run)
     return repo_dir
@@ -280,6 +336,85 @@ def branch_name(job: Job) -> str:
 
 def spec_path(job: Job) -> str:
     return f"specs/issues/issue-{job.number}-{slugify(job.title, 'spec')}.md"
+
+
+def codex_candidates(config: Config) -> list[str]:
+    candidates: list[str] = []
+    if config.codex_bin:
+        candidates.append(config.codex_bin)
+    path_codex = shutil.which("codex")
+    if path_codex:
+        candidates.append(path_codex)
+    candidates.append("/Applications/ChatGPT.app/Contents/Resources/codex")
+
+    seen: set[str] = set()
+    unique_candidates: list[str] = []
+    for candidate in candidates:
+        if candidate in seen:
+            continue
+        seen.add(candidate)
+        unique_candidates.append(candidate)
+    return unique_candidates
+
+
+def run_probe(args: list[str], cwd: Path, env: dict[str, str]) -> subprocess.CompletedProcess[str]:
+    try:
+        return subprocess.run(args, cwd=str(cwd), env=env, text=True, capture_output=True, timeout=30)
+    except (FileNotFoundError, PermissionError) as exc:
+        return subprocess.CompletedProcess(args, 127, "", str(exc))
+
+
+def resolve_codex(config: Config, cwd: Path, env: dict[str, str], log_file: Path) -> str:
+    errors: list[str] = []
+    for candidate in codex_candidates(config):
+        version = run_probe([candidate, "--version"], cwd, env)
+        if version.returncode == 0:
+            return candidate
+        output = (version.stderr or version.stdout or "").strip()
+        errors.append(f"{candidate}: {output or 'exit ' + str(version.returncode)}")
+        if config.codex_bin:
+            break
+
+    with log_file.open("a", encoding="utf-8") as log:
+        log.write("\nCodex binary probes failed:\n")
+        for error in errors:
+            log.write(f"- {error}\n")
+    raise RuntimeError(
+        "No working Codex CLI was found. Set GATEWAY_CODEX_BIN to a working binary "
+        "or set GATEWAY_AGENT_COMMAND for Hermes."
+    )
+
+
+def codex_exec_owns_approval_flag(codex: str, cwd: Path, env: dict[str, str]) -> bool:
+    help_result = run_probe([codex, "exec", "--help"], cwd, env)
+    combined = f"{help_result.stdout}\n{help_result.stderr}"
+    return "--ask-for-approval" in combined
+
+
+def build_codex_command(codex: str, repo_dir: Path, prompt: str, env: dict[str, str]) -> list[str]:
+    if codex_exec_owns_approval_flag(codex, repo_dir, env):
+        return [
+            codex,
+            "exec",
+            "--cd",
+            str(repo_dir),
+            "--sandbox",
+            "workspace-write",
+            "--ask-for-approval",
+            "never",
+            prompt,
+        ]
+    return [
+        codex,
+        "--ask-for-approval",
+        "never",
+        "exec",
+        "--cd",
+        str(repo_dir),
+        "--sandbox",
+        "workspace-write",
+        prompt,
+    ]
 
 
 def run_agent(config: Config, job: Job, repo_dir: Path, log_file: Path) -> None:
@@ -324,21 +459,9 @@ requests, add labels, or comment on GitHub. The gateway will handle those side e
         )
         return
 
-    codex = shutil.which("codex")
-    if not codex:
-        raise RuntimeError("codex CLI was not found. Set GATEWAY_AGENT_COMMAND for Hermes or install Codex CLI.")
+    codex = resolve_codex(config, repo_dir, env, log_file)
     run_command(
-        [
-            codex,
-            "exec",
-            "--cd",
-            str(repo_dir),
-            "--sandbox",
-            "workspace-write",
-            "--ask-for-approval",
-            "never",
-            prompt,
-        ],
+        build_codex_command(codex, repo_dir, prompt, env),
         repo_dir,
         log_file,
         env=env,
@@ -582,9 +705,10 @@ def main() -> int:
     parser.add_argument("--port", type=int, help="Bind port. Defaults to GATEWAY_PORT or 8787.")
     parser.add_argument("--once", type=Path, help="Process one GitHub issue event JSON and exit.")
     parser.add_argument("--dry-run", action="store_true", help="Log planned commands without running them.")
-    args = parser.parse_args( )
+    args = parser.parse_args()
 
     config = Config.from_env(args)
+    config.require_safe_repo_url_config()
     if args.once:
         payload = json.loads(args.once.read_text(encoding="utf-8"))
         status, response = schedule_or_run(config, payload)
