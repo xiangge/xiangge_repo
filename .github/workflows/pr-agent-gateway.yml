@@ -1,0 +1,87 @@
+name: PR Agent Gateway
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+  issue_comment:
+    types: [created, edited]
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
+jobs:
+  dispatch-pr:
+    name: Dispatch PR to local agent gateway
+    runs-on: ubuntu-latest
+    if: >-
+      ${{
+        github.event_name == 'pull_request' &&
+        startsWith(github.event.pull_request.head.ref, 'codex/issue-')
+      }}
+
+    steps:
+      - name: Dispatch PR event
+        env:
+          GATEWAY_URL: ${{ secrets.GATEWAY_URL }}
+          GATEWAY_TOKEN: ${{ secrets.GATEWAY_TOKEN }}
+          DELIVERY_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          if [ -z "$GATEWAY_URL" ]; then
+            echo "::error::Missing GATEWAY_URL secret"
+            exit 1
+          fi
+
+          if [ -z "$GATEWAY_TOKEN" ]; then
+            echo "::error::Missing GATEWAY_TOKEN secret"
+            exit 1
+          fi
+
+          GATEWAY_BASE_URL="${GATEWAY_URL%/github/issues}"
+          GATEWAY_BASE_URL="${GATEWAY_BASE_URL%/github/webhook}"
+
+          curl --fail-with-body --retry 3 --connect-timeout 10 --max-time 120 \
+            -X POST "$GATEWAY_BASE_URL/github/pull-requests" \
+            -H "Authorization: Bearer $GATEWAY_TOKEN" \
+            -H "Content-Type: application/json" \
+            -H "X-GitHub-Event: pull_request" \
+            -H "X-GitHub-Delivery: $DELIVERY_ID" \
+            --data-binary @"$GITHUB_EVENT_PATH"
+
+  dispatch-comment:
+    name: Dispatch PR comment to local agent gateway
+    runs-on: ubuntu-latest
+    if: >-
+      ${{
+        github.event_name == 'issue_comment' &&
+        github.event.issue.pull_request
+      }}
+
+    steps:
+      - name: Dispatch PR comment event
+        env:
+          GATEWAY_URL: ${{ secrets.GATEWAY_URL }}
+          GATEWAY_TOKEN: ${{ secrets.GATEWAY_TOKEN }}
+          DELIVERY_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          if [ -z "$GATEWAY_URL" ]; then
+            echo "::error::Missing GATEWAY_URL secret"
+            exit 1
+          fi
+
+          if [ -z "$GATEWAY_TOKEN" ]; then
+            echo "::error::Missing GATEWAY_TOKEN secret"
+            exit 1
+          fi
+
+          GATEWAY_BASE_URL="${GATEWAY_URL%/github/issues}"
+          GATEWAY_BASE_URL="${GATEWAY_BASE_URL%/github/webhook}"
+
+          curl --fail-with-body --retry 3 --connect-timeout 10 --max-time 120 \
+            -X POST "$GATEWAY_BASE_URL/github/comments" \
+            -H "Authorization: Bearer $GATEWAY_TOKEN" \
+            -H "Content-Type: application/json" \
+            -H "X-GitHub-Event: issue_comment" \
+            -H "X-GitHub-Delivery: $DELIVERY_ID" \
+            --data-binary @"$GITHUB_EVENT_PATH"
